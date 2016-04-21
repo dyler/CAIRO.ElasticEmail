@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Net;
 using System.Xml.Serialization;
+using Newtonsoft.Json;
 
 namespace CAIRO.ElasticEmail
 {
@@ -77,15 +78,60 @@ namespace CAIRO.ElasticEmail
             return result;
         }
 
-        
-
-        public DeliveryStatusResponse GetDeliveryStatus(Guid transactionId)
+        public DeliveryStatusResponseJson GetDeliveryStatusJson(Guid transactionId)
         {
-            var response = new DeliveryStatusResponse();
+            var response = new DeliveryStatusResponseJson();
 
             try
             {
+                var requestString = "https://api.elasticemail.com/v2/email/getstatus?apikey=" + _configuration.ApiKey + "&transactionID=" + transactionId + "&showstats=true";
+                var request = WebRequest.Create(requestString);
+                Stream stream = new RetryLogic(_configuration.PreferredRetryStrategy).Execute(() => request.GetResponse().GetResponseStream());
+                var jsonString = new StreamReader(stream).ReadToEnd();
+                if (jsonString.StartsWith("{\"success\":false"))
+                {
+                    response.ErrorMessage = jsonString;
+                    response.ResultType = ResultType.Error;
+                }
+
+                else
+                {
+                    try
+                    {
+                        DeliveryStatusJson job = JsonConvert.DeserializeObject<DeliveryStatusJson>(jsonString);
+                        if (job.data == null)
+                        {
+                            response.ErrorMessage = jsonString;
+                            response.ResultType = ResultType.Error;
+                            return response;
+                        }                      
+                        response.DeliveryStatus = job;
+                        response.ResultType = ResultType.Success;
+                    }
+                    catch (Exception ex)
+                    {
+                        response.ErrorMessage = "Could not deserialize message: " + Environment.NewLine + ex;
+                        response.ResultType = ResultType.Error;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                response.ErrorMessage = ex.ToString();
+                response.ResultType = ResultType.Error;
+            }
+
+            return response;
+        }
+
+        public DeliveryStatusResponseXml GetDeliveryStatusXml(Guid transactionId)
+        {
+            var response = new DeliveryStatusResponseXml();
+            
+            try
+            {
                 var requestString = "https://api.elasticemail.com/mailer/status/" + transactionId + "?showstats=true";
+                
                 var request = WebRequest.Create(requestString);
                 Stream stream = new RetryLogic(_configuration.PreferredRetryStrategy).Execute(() => request.GetResponse().GetResponseStream());
                 var xmlString = new StreamReader(stream, Encoding.UTF8).ReadToEnd();
@@ -101,7 +147,7 @@ namespace CAIRO.ElasticEmail
                         XmlSerializer serializer = new XmlSerializer(typeof(job));
                         StringReader rdr = new StringReader(xmlString);
                         var job = (job)serializer.Deserialize(rdr);
-                        var deliveryStatus = new DeliveryStatus();
+                        var deliveryStatus = new DeliveryStatusXml();
                         deliveryStatus.Id = transactionId;
                         deliveryStatus.Recipients = job.recipients;
                         deliveryStatus.Delivered = job.delivered;

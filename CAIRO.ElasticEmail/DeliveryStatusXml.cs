@@ -2,7 +2,7 @@
 
 namespace CAIRO.ElasticEmail
 {
-    public class DeliveryStatus
+    public class DeliveryStatusXml
     {
         public Guid Id { get; set; }
         public string Status { get; set; }
@@ -13,6 +13,5 @@ namespace CAIRO.ElasticEmail
         public int Clicked { get; set; }
         public int Opened { get; set; }
         public int Unsubscribed { get; set; }
-
     }
 }
